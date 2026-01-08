@@ -3,8 +3,8 @@ package main
 
 import (
 	"context"
+	"errors"
 	"net/http"
-	"os"
 	"os/signal"
 	"syscall"
 
@@ -17,6 +17,7 @@ import (
 	"github.com/avitamin/go-gophermart/internal/pkg/auth"
 	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
+	"golang.org/x/sync/errgroup"
 )
 
 func main() {
@@ -71,8 +72,14 @@ func main() {
 	})
 
 	// Create context for graceful shutdown
-	ctx, cancel := context.WithCancel(context.Background())
+	ctx, cancel := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer cancel()
+
+	// Create HTTP server
+	server := &http.Server{
+		Addr:    cfg.RunAddress,
+		Handler: router,
+	}
 
 	// Start accrual worker if configured
 	var accrualWorker *accrual.Worker
@@ -82,20 +89,23 @@ func main() {
 		accrualWorker.Start(ctx)
 	}
 
-	// Create HTTP server
-	server := &http.Server{
-		Addr:    cfg.RunAddress,
-		Handler: router,
-	}
+	// Use errgroup for coordinated server lifecycle
+	eg, egCtx := errgroup.WithContext(ctx)
 
-	// Handle shutdown signals
-	go func() {
-		sigChan := make(chan os.Signal, 1)
-		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
-		<-sigChan
+	// Run HTTP server
+	eg.Go(func() error {
+		log.Info("starting server", zap.String("address", cfg.RunAddress))
+		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			return err
+		}
+		return nil
+	})
+
+	// Handle graceful shutdown
+	eg.Go(func() error {
+		<-egCtx.Done()
 
 		log.Info("shutting down server...")
-		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer shutdownCancel()
@@ -107,11 +117,11 @@ func main() {
 		if accrualWorker != nil {
 			accrualWorker.Stop()
 		}
-	}()
 
-	// Start server
-	log.Info("starting server", zap.String("address", cfg.RunAddress))
-	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+		return nil
+	})
+
+	if err := eg.Wait(); err != nil {
 		log.Fatal("server error", zap.Error(err))
 	}
 
