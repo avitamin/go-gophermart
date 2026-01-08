@@ -7,14 +7,12 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/avitamin/go-gophermart/internal/adapters/http/middleware"
 	"github.com/avitamin/go-gophermart/internal/domain/entity"
 	"github.com/avitamin/go-gophermart/internal/domain/repository"
 	"github.com/avitamin/go-gophermart/internal/domain/service"
 	"go.uber.org/zap"
 )
-
-// TokenCookieName is the name of the cookie that stores the JWT token.
-const TokenCookieName = "token"
 
 // DefaultTokenDuration is the default token duration for cookies.
 const DefaultTokenDuration = 7 * 24 * time.Hour
@@ -36,7 +34,7 @@ func NewUserHandler(userService *service.UserService, log *zap.Logger) *UserHand
 // setTokenCookie sets the JWT token in a cookie.
 func setTokenCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
-		Name:     TokenCookieName,
+		Name:     middleware.TokenCookieName,
 		Value:    token,
 		Path:     "/",
 		MaxAge:   int(DefaultTokenDuration.Seconds()),
