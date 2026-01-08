@@ -1,0 +1,75 @@
+services:
+  gophermart:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8091:8080"
+    environment:
+      - RUN_ADDRESS=:8080
+      - DATABASE_URI=postgres://gophermart:gophermart@postgres:5432/gophermart?sslmode=disable
+      - ACCRUAL_SYSTEM_ADDRESS=${ACCRUAL_SYSTEM_ADDRESS:-}
+      - JWT_SECRET=${JWT_SECRET:-gophermart-secret-key-change-in-production}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    restart: unless-stopped
+    networks:
+      - gophermart-network
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=gophermart
+      - POSTGRES_PASSWORD=gophermart
+      - POSTGRES_DB=gophermart
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    ports:
+      - "54321:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U gophermart -d gophermart"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gophermart-network
+
+  accrual:
+    build:
+      context: .
+      dockerfile: ./docker/accrual/Dockerfile
+    ports:
+      - "8092:8080"
+    environment:
+      - DATABASE_URI=postgres://accrual:accrual@accrual-db:5432/accrual?sslmode=disable
+
+  accrual-db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_USER=accrual
+      - POSTGRES_PASSWORD=accrual
+      - POSTGRES_DB=accrual
+    volumes:
+      - accrual-data:/var/lib/postgresql/data
+    ports:
+      - "54322:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U accrual -d accrual"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+    networks:
+      - gophermart-network
+
+
+volumes:
+  postgres-data:
+  accrual-data:
+
+networks:
+  gophermart-network:
+    driver: bridge

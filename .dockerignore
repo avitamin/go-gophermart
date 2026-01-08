@@ -1,0 +1,44 @@
+# Git
+.git
+.gitignore
+
+# IDE
+.idea
+.vscode
+*.swp
+*.swo
+
+# Binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+gophermart
+
+# Test files
+*_test.go
+**/*_test.go
+
+# Documentation
+*.md
+LICENSE
+
+# Docker
+Dockerfile
+docker-compose.yml
+docker-compose*.yml
+.dockerignore
+
+# Local environment
+.env
+.env.*
+
+# Build artifacts
+/tmp
+/bin
+/dist
+
+# Coverage
+*.out
+coverage.*
