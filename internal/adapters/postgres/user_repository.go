@@ -32,7 +32,7 @@ func (r *UserRepository) Create(ctx context.Context, login, passwordHash string)
 		if IsUniqueViolation(err) {
 			return 0, repository.ErrUserExists
 		}
-		LogError("create user", err)
+		r.db.LogError("create user", err)
 		return 0, err
 	}
 	return id, nil
@@ -50,7 +50,7 @@ func (r *UserRepository) GetByLogin(ctx context.Context, login string) (*entity.
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
-		LogError("get user by login", err)
+		r.db.LogError("get user by login", err)
 		return nil, err
 	}
 	return user, nil
@@ -68,7 +68,7 @@ func (r *UserRepository) GetByID(ctx context.Context, id int64) (*entity.User, e
 		if errors.Is(err, sql.ErrNoRows) {
 			return nil, repository.ErrUserNotFound
 		}
-		LogError("get user by id", err)
+		r.db.LogError("get user by id", err)
 		return nil, err
 	}
 	return user, nil

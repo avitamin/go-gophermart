@@ -12,7 +12,6 @@ import (
 
 	"github.com/avitamin/go-gophermart/internal/domain/entity"
 	"github.com/avitamin/go-gophermart/internal/domain/repository"
-	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -29,15 +28,17 @@ func (e *ErrRateLimited) Error() string {
 type Client struct {
 	baseURL    string
 	httpClient *http.Client
+	log        *zap.Logger
 }
 
 // NewClient creates a new accrual system client.
-func NewClient(baseURL string) *Client {
+func NewClient(baseURL string, log *zap.Logger) *Client {
 	return &Client{
 		baseURL: baseURL,
 		httpClient: &http.Client{
 			Timeout: 10 * time.Second,
 		},
+		log: log,
 	}
 }
 
@@ -72,7 +73,7 @@ func (c *Client) GetOrderAccrual(ctx context.Context, orderNumber string) (*repo
 
 		result := &repository.AccrualResponse{
 			Order:  accrualResp.Order,
-			Status: mapStatus(accrualResp.Status),
+			Status: c.mapStatus(accrualResp.Status),
 		}
 
 		if accrualResp.Accrual > 0 {
@@ -98,7 +99,7 @@ func (c *Client) GetOrderAccrual(ctx context.Context, orderNumber string) (*repo
 	}
 }
 
-func mapStatus(status string) entity.OrderStatus {
+func (c *Client) mapStatus(status string) entity.OrderStatus {
 	switch status {
 	case "REGISTERED":
 		return entity.OrderStatusNew
@@ -109,7 +110,7 @@ func mapStatus(status string) entity.OrderStatus {
 	case "PROCESSED":
 		return entity.OrderStatusProcessed
 	default:
-		logger.Warn("unknown accrual status", zap.String("status", status))
+		c.log.Warn("unknown accrual status", zap.String("status", status))
 		return entity.OrderStatusNew
 	}
 }

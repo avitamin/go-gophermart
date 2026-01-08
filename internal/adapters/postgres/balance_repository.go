@@ -28,7 +28,7 @@ func (r *BalanceRepository) GetBalance(ctx context.Context, userID int64) (*enti
 		userID, entity.OrderStatusProcessed,
 	).Scan(&balance.Current)
 	if err != nil {
-		LogError("get total accrued", err)
+		r.db.LogError("get total accrued", err)
 		return nil, err
 	}
 
@@ -38,7 +38,7 @@ func (r *BalanceRepository) GetBalance(ctx context.Context, userID int64) (*enti
 		userID,
 	).Scan(&balance.Withdrawn)
 	if err != nil {
-		LogError("get total withdrawn", err)
+		r.db.LogError("get total withdrawn", err)
 		return nil, err
 	}
 
@@ -50,7 +50,7 @@ func (r *BalanceRepository) GetBalance(ctx context.Context, userID int64) (*enti
 func (r *BalanceRepository) CreateWithdrawal(ctx context.Context, userID int64, orderNumber string, sum float64) error {
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
-		LogError("begin transaction", err)
+		r.db.LogError("begin transaction", err)
 		return err
 	}
 	defer tx.Rollback()
@@ -62,7 +62,7 @@ func (r *BalanceRepository) CreateWithdrawal(ctx context.Context, userID int64, 
 		userID, entity.OrderStatusProcessed,
 	).Scan(&totalAccrued)
 	if err != nil {
-		LogError("get total accrued in tx", err)
+		r.db.LogError("get total accrued in tx", err)
 		return err
 	}
 
@@ -72,7 +72,7 @@ func (r *BalanceRepository) CreateWithdrawal(ctx context.Context, userID int64, 
 		userID,
 	).Scan(&totalWithdrawn)
 	if err != nil {
-		LogError("get total withdrawn in tx", err)
+		r.db.LogError("get total withdrawn in tx", err)
 		return err
 	}
 
@@ -86,12 +86,12 @@ func (r *BalanceRepository) CreateWithdrawal(ctx context.Context, userID int64, 
 		userID, orderNumber, sum, time.Now(),
 	)
 	if err != nil {
-		LogError("insert withdrawal", err)
+		r.db.LogError("insert withdrawal", err)
 		return err
 	}
 
 	if err := tx.Commit(); err != nil {
-		LogError("commit transaction", err)
+		r.db.LogError("commit transaction", err)
 		return err
 	}
 
@@ -108,7 +108,7 @@ func (r *BalanceRepository) GetWithdrawals(ctx context.Context, userID int64) ([
 		userID,
 	)
 	if err != nil {
-		LogError("get withdrawals", err)
+		r.db.LogError("get withdrawals", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -117,14 +117,14 @@ func (r *BalanceRepository) GetWithdrawals(ctx context.Context, userID int64) ([
 	for rows.Next() {
 		var w entity.Withdrawal
 		if err := rows.Scan(&w.ID, &w.UserID, &w.OrderNumber, &w.Sum, &w.ProcessedAt); err != nil {
-			LogError("scan withdrawal", err)
+			r.db.LogError("scan withdrawal", err)
 			return nil, err
 		}
 		withdrawals = append(withdrawals, w)
 	}
 
 	if err := rows.Err(); err != nil {
-		LogError("rows iteration", err)
+		r.db.LogError("rows iteration", err)
 		return nil, err
 	}
 

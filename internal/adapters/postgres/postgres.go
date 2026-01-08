@@ -11,7 +11,6 @@ import (
 	"github.com/golang-migrate/migrate/v4/source/iofs"
 	_ "github.com/jackc/pgx/v5/stdlib"
 
-	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -21,10 +20,11 @@ var migrationsFS embed.FS
 // DB wraps sql.DB with additional functionality.
 type DB struct {
 	*sql.DB
+	log *zap.Logger
 }
 
 // New creates a new database connection and runs migrations.
-func New(databaseURI string) (*DB, error) {
+func New(databaseURI string, log *zap.Logger) (*DB, error) {
 	db, err := sql.Open("pgx", databaseURI)
 	if err != nil {
 		return nil, err
@@ -34,15 +34,15 @@ func New(databaseURI string) (*DB, error) {
 		return nil, err
 	}
 
-	if err := runMigrations(db); err != nil {
+	if err := runMigrations(db, log); err != nil {
 		return nil, err
 	}
 
-	logger.Info("database connected and migrations applied")
-	return &DB{db}, nil
+	log.Info("database connected and migrations applied")
+	return &DB{DB: db, log: log}, nil
 }
 
-func runMigrations(db *sql.DB) error {
+func runMigrations(db *sql.DB, log *zap.Logger) error {
 	driver, err := postgres.WithInstance(db, &postgres.Config{})
 	if err != nil {
 		return err
@@ -62,13 +62,13 @@ func runMigrations(db *sql.DB) error {
 		return err
 	}
 
-	logger.Info("migrations applied successfully")
+	log.Info("migrations applied successfully")
 	return nil
 }
 
 // Close closes the database connection.
 func (db *DB) Close() error {
-	logger.Info("closing database connection")
+	db.log.Info("closing database connection")
 	return db.DB.Close()
 }
 
@@ -91,8 +91,8 @@ func contains(s, substr string) bool {
 }
 
 // LogError logs a database error with context.
-func LogError(operation string, err error) {
-	logger.Error("database error",
+func (db *DB) LogError(operation string, err error) {
+	db.log.Error("database error",
 		zap.String("operation", operation),
 		zap.Error(err),
 	)

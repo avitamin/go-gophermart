@@ -7,6 +7,7 @@ import (
 	"github.com/avitamin/go-gophermart/internal/adapters/http/handler"
 	"github.com/avitamin/go-gophermart/internal/adapters/http/middleware"
 	"github.com/avitamin/go-gophermart/internal/pkg/auth"
+	"go.uber.org/zap"
 )
 
 // Router holds all HTTP handlers.
@@ -15,6 +16,7 @@ type Router struct {
 	OrderHandler   *handler.OrderHandler
 	BalanceHandler *handler.BalanceHandler
 	JWTManager     *auth.JWTManager
+	Logger         *zap.Logger
 }
 
 // NewRouter creates a new chi router with all routes configured.
@@ -22,7 +24,7 @@ func NewRouter(r *Router) chi.Router {
 	router := chi.NewRouter()
 
 	// Global middleware
-	router.Use(middleware.Logging)
+	router.Use(middleware.Logging(r.Logger))
 	router.Use(middleware.Gzip)
 
 	// Public routes

@@ -9,18 +9,21 @@ import (
 
 	"github.com/avitamin/go-gophermart/internal/adapters/http/middleware"
 	"github.com/avitamin/go-gophermart/internal/domain/service"
-	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
 // OrderHandler handles order-related HTTP requests.
 type OrderHandler struct {
 	orderService *service.OrderService
+	log          *zap.Logger
 }
 
 // NewOrderHandler creates a new OrderHandler.
-func NewOrderHandler(orderService *service.OrderService) *OrderHandler {
-	return &OrderHandler{orderService: orderService}
+func NewOrderHandler(orderService *service.OrderService, log *zap.Logger) *OrderHandler {
+	return &OrderHandler{
+		orderService: orderService,
+		log:          log,
+	}
 }
 
 // CreateOrder handles order creation.
@@ -58,7 +61,7 @@ func (h *OrderHandler) CreateOrder(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid order number format", http.StatusUnprocessableEntity)
 			return
 		}
-		logger.Error("create order failed", zap.Error(err))
+		h.log.Error("create order failed", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -77,7 +80,7 @@ func (h *OrderHandler) GetOrders(w http.ResponseWriter, r *http.Request) {
 
 	orders, err := h.orderService.GetUserOrders(r.Context(), userID)
 	if err != nil {
-		logger.Error("get orders failed", zap.Error(err))
+		h.log.Error("get orders failed", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

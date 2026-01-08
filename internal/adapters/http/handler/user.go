@@ -10,7 +10,6 @@ import (
 	"github.com/avitamin/go-gophermart/internal/domain/entity"
 	"github.com/avitamin/go-gophermart/internal/domain/repository"
 	"github.com/avitamin/go-gophermart/internal/domain/service"
-	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -23,11 +22,15 @@ const DefaultTokenDuration = 7 * 24 * time.Hour
 // UserHandler handles user-related HTTP requests.
 type UserHandler struct {
 	userService *service.UserService
+	log         *zap.Logger
 }
 
 // NewUserHandler creates a new UserHandler.
-func NewUserHandler(userService *service.UserService) *UserHandler {
-	return &UserHandler{userService: userService}
+func NewUserHandler(userService *service.UserService, log *zap.Logger) *UserHandler {
+	return &UserHandler{
+		userService: userService,
+		log:         log,
+	}
 }
 
 // setTokenCookie sets the JWT token in a cookie.
@@ -61,7 +64,7 @@ func (h *UserHandler) Register(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, err.Error(), http.StatusBadRequest)
 			return
 		}
-		logger.Error("registration failed", zap.Error(err))
+		h.log.Error("registration failed", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}
@@ -86,7 +89,7 @@ func (h *UserHandler) Login(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, "Invalid credentials", http.StatusUnauthorized)
 			return
 		}
-		logger.Error("login failed", zap.Error(err))
+		h.log.Error("login failed", zap.Error(err))
 		http.Error(w, "Internal server error", http.StatusInternalServerError)
 		return
 	}

@@ -24,20 +24,21 @@ func main() {
 	cfg := config.New()
 
 	// Initialize logger
-	if err := logger.Init(cfg.LogLevel); err != nil {
+	log, err := logger.New(cfg.LogLevel)
+	if err != nil {
 		panic("failed to initialize logger: " + err.Error())
 	}
-	defer logger.Sync()
+	defer log.Sync()
 
 	// Validate required configuration
 	if cfg.DatabaseURI == "" {
-		logger.Fatal("DATABASE_URI is required")
+		log.Fatal("DATABASE_URI is required")
 	}
 
 	// Initialize database
-	db, err := postgres.New(cfg.DatabaseURI)
+	db, err := postgres.New(cfg.DatabaseURI, log)
 	if err != nil {
-		logger.Fatal("failed to connect to database", zap.Error(err))
+		log.Fatal("failed to connect to database", zap.Error(err))
 	}
 	defer db.Close()
 
@@ -56,9 +57,9 @@ func main() {
 	balanceService := service.NewBalanceService(balanceRepo)
 
 	// Initialize handlers
-	userHandler := handler.NewUserHandler(userService)
-	orderHandler := handler.NewOrderHandler(orderService)
-	balanceHandler := handler.NewBalanceHandler(balanceService)
+	userHandler := handler.NewUserHandler(userService, log)
+	orderHandler := handler.NewOrderHandler(orderService, log)
+	balanceHandler := handler.NewBalanceHandler(balanceService, log)
 
 	// Create router
 	router := httpAdapter.NewRouter(&httpAdapter.Router{
@@ -66,6 +67,7 @@ func main() {
 		OrderHandler:   orderHandler,
 		BalanceHandler: balanceHandler,
 		JWTManager:     jwtManager,
+		Logger:         log,
 	})
 
 	// Create context for graceful shutdown
@@ -75,8 +77,8 @@ func main() {
 	// Start accrual worker if configured
 	var accrualWorker *accrual.Worker
 	if cfg.AccrualSystemAddress != "" {
-		accrualClient := accrual.NewClient(cfg.AccrualSystemAddress)
-		accrualWorker = accrual.NewWorker(accrualClient, orderService, cfg.WorkerCount, cfg.WorkerInterval)
+		accrualClient := accrual.NewClient(cfg.AccrualSystemAddress, log)
+		accrualWorker = accrual.NewWorker(accrualClient, orderService, cfg.WorkerCount, cfg.WorkerInterval, log)
 		accrualWorker.Start(ctx)
 	}
 
@@ -92,14 +94,14 @@ func main() {
 		signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 		<-sigChan
 
-		logger.Info("shutting down server...")
+		log.Info("shutting down server...")
 		cancel()
 
 		shutdownCtx, shutdownCancel := context.WithTimeout(context.Background(), cfg.ShutdownTimeout)
 		defer shutdownCancel()
 
 		if err := server.Shutdown(shutdownCtx); err != nil {
-			logger.Error("server shutdown error", zap.Error(err))
+			log.Error("server shutdown error", zap.Error(err))
 		}
 
 		if accrualWorker != nil {
@@ -108,10 +110,10 @@ func main() {
 	}()
 
 	// Start server
-	logger.Info("starting server", zap.String("address", cfg.RunAddress))
+	log.Info("starting server", zap.String("address", cfg.RunAddress))
 	if err := server.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-		logger.Fatal("server error", zap.Error(err))
+		log.Fatal("server error", zap.Error(err))
 	}
 
-	logger.Info("server stopped")
+	log.Info("server stopped")
 }

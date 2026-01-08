@@ -8,7 +8,6 @@ import (
 
 	"github.com/avitamin/go-gophermart/internal/domain/entity"
 	"github.com/avitamin/go-gophermart/internal/domain/service"
-	"github.com/avitamin/go-gophermart/internal/pkg/logger"
 	"go.uber.org/zap"
 )
 
@@ -22,22 +21,24 @@ type Worker struct {
 	wg           sync.WaitGroup
 	rateLimitMu  sync.RWMutex
 	rateLimitEnd time.Time
+	log          *zap.Logger
 }
 
 // NewWorker creates a new accrual worker pool.
-func NewWorker(client *Client, orderService *service.OrderService, workerCount int, interval time.Duration) *Worker {
+func NewWorker(client *Client, orderService *service.OrderService, workerCount int, interval time.Duration, log *zap.Logger) *Worker {
 	return &Worker{
 		client:       client,
 		orderService: orderService,
 		workerCount:  workerCount,
 		interval:     interval,
 		orderChan:    make(chan entity.Order, 100),
+		log:          log,
 	}
 }
 
 // Start starts the worker pool.
 func (w *Worker) Start(ctx context.Context) {
-	logger.Info("starting accrual workers", zap.Int("count", w.workerCount))
+	w.log.Info("starting accrual workers", zap.Int("count", w.workerCount))
 
 	// Start workers
 	for i := 0; i < w.workerCount; i++ {
@@ -54,7 +55,7 @@ func (w *Worker) Start(ctx context.Context) {
 func (w *Worker) Stop() {
 	close(w.orderChan)
 	w.wg.Wait()
-	logger.Info("accrual workers stopped")
+	w.log.Info("accrual workers stopped")
 }
 
 func (w *Worker) fetchOrders(ctx context.Context) {
@@ -83,7 +84,7 @@ func (w *Worker) loadPendingOrders(ctx context.Context) {
 
 	orders, err := w.orderService.GetPendingOrders(ctx)
 	if err != nil {
-		logger.Error("failed to get pending orders", zap.Error(err))
+		w.log.Error("failed to get pending orders", zap.Error(err))
 		return
 	}
 
@@ -127,7 +128,7 @@ func (w *Worker) processOrder(ctx context.Context, order entity.Order) {
 	accrualResp, err := w.client.GetOrderAccrual(ctx, order.Number)
 	if err != nil {
 		if rateLimitErr, ok := IsRateLimited(err); ok {
-			logger.Warn("rate limited by accrual service",
+			w.log.Warn("rate limited by accrual service",
 				zap.String("order", order.Number),
 				zap.Duration("retry_after", rateLimitErr.RetryAfter),
 			)
@@ -136,7 +137,7 @@ func (w *Worker) processOrder(ctx context.Context, order entity.Order) {
 			w.rateLimitMu.Unlock()
 			return
 		}
-		logger.Error("failed to get order accrual",
+		w.log.Error("failed to get order accrual",
 			zap.String("order", order.Number),
 			zap.Error(err),
 		)
@@ -151,13 +152,13 @@ func (w *Worker) processOrder(ctx context.Context, order entity.Order) {
 	// Update order status if changed
 	if accrualResp.Status != order.Status {
 		if err := w.orderService.UpdateOrderStatus(ctx, order.Number, accrualResp.Status, accrualResp.Accrual); err != nil {
-			logger.Error("failed to update order status",
+			w.log.Error("failed to update order status",
 				zap.String("order", order.Number),
 				zap.Error(err),
 			)
 			return
 		}
-		logger.Info("order status updated",
+		w.log.Info("order status updated",
 			zap.String("order", order.Number),
 			zap.String("status", string(accrualResp.Status)),
 		)

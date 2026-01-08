@@ -38,7 +38,7 @@ func (r *OrderRepository) Create(ctx context.Context, userID int64, number strin
 	}
 
 	if !errors.Is(err, sql.ErrNoRows) {
-		LogError("check existing order", err)
+		r.db.LogError("check existing order", err)
 		return err
 	}
 
@@ -47,7 +47,7 @@ func (r *OrderRepository) Create(ctx context.Context, userID int64, number strin
 		userID, number, entity.OrderStatusNew, time.Now(),
 	)
 	if err != nil {
-		LogError("create order", err)
+		r.db.LogError("create order", err)
 		return err
 	}
 	return nil
@@ -63,7 +63,7 @@ func (r *OrderRepository) GetByUserID(ctx context.Context, userID int64) ([]enti
 		userID,
 	)
 	if err != nil {
-		LogError("get orders by user", err)
+		r.db.LogError("get orders by user", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -72,14 +72,14 @@ func (r *OrderRepository) GetByUserID(ctx context.Context, userID int64) ([]enti
 	for rows.Next() {
 		var order entity.Order
 		if err := rows.Scan(&order.ID, &order.UserID, &order.Number, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
-			LogError("scan order", err)
+			r.db.LogError("scan order", err)
 			return nil, err
 		}
 		orders = append(orders, order)
 	}
 
 	if err := rows.Err(); err != nil {
-		LogError("rows iteration", err)
+		r.db.LogError("rows iteration", err)
 		return nil, err
 	}
 
@@ -95,7 +95,7 @@ func (r *OrderRepository) GetPending(ctx context.Context) ([]entity.Order, error
 		entity.OrderStatusNew, entity.OrderStatusProcessing,
 	)
 	if err != nil {
-		LogError("get pending orders", err)
+		r.db.LogError("get pending orders", err)
 		return nil, err
 	}
 	defer rows.Close()
@@ -104,14 +104,14 @@ func (r *OrderRepository) GetPending(ctx context.Context) ([]entity.Order, error
 	for rows.Next() {
 		var order entity.Order
 		if err := rows.Scan(&order.ID, &order.UserID, &order.Number, &order.Status, &order.Accrual, &order.UploadedAt); err != nil {
-			LogError("scan order", err)
+			r.db.LogError("scan order", err)
 			return nil, err
 		}
 		orders = append(orders, order)
 	}
 
 	if err := rows.Err(); err != nil {
-		LogError("rows iteration", err)
+		r.db.LogError("rows iteration", err)
 		return nil, err
 	}
 
@@ -125,7 +125,7 @@ func (r *OrderRepository) UpdateStatus(ctx context.Context, number string, statu
 		status, accrual, number,
 	)
 	if err != nil {
-		LogError("update order status", err)
+		r.db.LogError("update order status", err)
 		return err
 	}
 	return nil
