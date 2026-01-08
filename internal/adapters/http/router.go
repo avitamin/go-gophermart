@@ -2,7 +2,7 @@
 package http
 
 import (
-	"github.com/go-chi/chi/v5"
+	"net/http"
 
 	"github.com/avitamin/go-gophermart/internal/adapters/http/handler"
 	"github.com/avitamin/go-gophermart/internal/adapters/http/middleware"
@@ -19,28 +19,31 @@ type Router struct {
 	Logger         *zap.Logger
 }
 
-// NewRouter creates a new chi router with all routes configured.
-func NewRouter(r *Router) chi.Router {
-	router := chi.NewRouter()
+// NewRouter creates a new router with all routes configured.
+func NewRouter(r *Router) http.Handler {
+	mux := http.NewServeMux()
 
-	// Global middleware
-	router.Use(middleware.Logging(r.Logger))
-	router.Use(middleware.Gzip)
+	auth := middleware.Auth(r.JWTManager)
 
 	// Public routes
-	router.Post("/api/user/register", r.UserHandler.Register)
-	router.Post("/api/user/login", r.UserHandler.Login)
+	mux.HandleFunc("POST /api/user/register", r.UserHandler.Register)
+	mux.HandleFunc("POST /api/user/login", r.UserHandler.Login)
 
 	// Protected routes
-	router.Group(func(router chi.Router) {
-		router.Use(middleware.Auth(r.JWTManager))
+	mux.Handle("POST /api/user/orders", auth(http.HandlerFunc(r.OrderHandler.CreateOrder)))
+	mux.Handle("GET /api/user/orders", auth(http.HandlerFunc(r.OrderHandler.GetOrders)))
+	mux.Handle("GET /api/user/balance", auth(http.HandlerFunc(r.BalanceHandler.GetBalance)))
+	mux.Handle("POST /api/user/balance/withdraw", auth(http.HandlerFunc(r.BalanceHandler.Withdraw)))
+	mux.Handle("GET /api/user/withdrawals", auth(http.HandlerFunc(r.BalanceHandler.GetWithdrawals)))
 
-		router.Post("/api/user/orders", r.OrderHandler.CreateOrder)
-		router.Get("/api/user/orders", r.OrderHandler.GetOrders)
-		router.Get("/api/user/balance", r.BalanceHandler.GetBalance)
-		router.Post("/api/user/balance/withdraw", r.BalanceHandler.Withdraw)
-		router.Get("/api/user/withdrawals", r.BalanceHandler.GetWithdrawals)
-	})
+	// Apply global middleware (order: Logging -> Gzip -> mux)
+	return chain(mux, middleware.Gzip, middleware.Logging(r.Logger))
+}
 
-	return router
+// chain applies middlewares in reverse order (last middleware wraps first).
+func chain(h http.Handler, middlewares ...func(http.Handler) http.Handler) http.Handler {
+	for _, m := range middlewares {
+		h = m(h)
+	}
+	return h
 }
